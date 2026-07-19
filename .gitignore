@@ -1,0 +1,8 @@
+# Go build artifacts
+/ovtest
+/cmd/ovtest/ovtest
+*.test
+*.out
+
+# run artifacts
+runs.jsonl

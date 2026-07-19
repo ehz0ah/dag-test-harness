@@ -1,0 +1,358 @@
+{
+  "version": 1,
+  "id": "agent_experience_learning_v1",
+  "memory_policy": {
+    "memory_types": [
+      "cases",
+      "trajectories",
+      "experiences"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "structured_tool_error_recovery",
+      "query": "Create a calendar event after the calendar tool rejects a relative date format.",
+      "expected": "The retrieved memory should teach that for calendar scheduling tasks, relative dates must be resolved into the concrete date format required by calendar_create before creating the event. A good memory says to retry only after changing the invalid date argument and to report success only after calendar_create succeeds. It should not merely say to debug tool errors generically.",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Schedule the vendor review for next Friday at 3 PM."
+        },
+        {
+          "role": "assistant",
+          "content": "I will create the calendar event.",
+          "tool_call": {
+            "id": "call_calendar_bad_date",
+            "name": "calendar_create",
+            "arguments": {
+              "title": "Vendor review",
+              "date": "next Friday",
+              "time": "15:00"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_calendar_bad_date",
+          "name": "calendar_create",
+          "content": {
+            "status": "error",
+            "error_type": "validation_error",
+            "field": "date",
+            "message": "date must be an ISO date in YYYY-MM-DD format"
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "The calendar tool needs an ISO date, so I will resolve the relative date before retrying.",
+          "tool_call": {
+            "id": "call_date_resolve",
+            "name": "date_resolve",
+            "arguments": {
+              "phrase": "next Friday"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_date_resolve",
+          "name": "date_resolve",
+          "content": {
+            "iso_date": "2027-04-16"
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "I will retry with the resolved ISO date.",
+          "tool_call": {
+            "id": "call_calendar_retry",
+            "name": "calendar_create",
+            "arguments": {
+              "title": "Vendor review",
+              "date": "2027-04-16",
+              "time": "15:00"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_calendar_retry",
+          "name": "calendar_create",
+          "content": {
+            "status": "created",
+            "event_id": "EVT-7002",
+            "title": "Vendor review",
+            "date": "2027-04-16",
+            "time": "15:00"
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "Scheduled the vendor review for next Friday at 3 PM."
+        }
+      ]
+    },
+    {
+      "id": "wrong_target_user_correction",
+      "query": "Move the launch review for a project named Apollo when search returns more than one Apollo project.",
+      "expected": "The retrieved memory should teach this rule: do not assume the first or most convenient result when a user names an ambiguous target and lookup returns multiple plausible objects. A good memory says to clarify with the user or rely on a stable identifier before doing state-changing work, and to repair any wrong target if the user corrects the mistake. It should not recommend treating a successful tool write as proof that the user's intended target was updated.",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Move Apollo's launch review to Friday afternoon."
+        },
+        {
+          "role": "assistant",
+          "content": "I will search for the Apollo project.",
+          "tool_call": {
+            "id": "call_apollo_search",
+            "name": "project_search",
+            "arguments": {
+              "query": "Apollo"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_apollo_search",
+          "name": "project_search",
+          "content": {
+            "results": [
+              {
+                "id": "PROJ-18",
+                "name": "Apollo Mobile",
+                "owner": "Design Systems",
+                "launch_review": "Tuesday morning"
+              },
+              {
+                "id": "PROJ-42",
+                "name": "Apollo Data",
+                "owner": "Analytics Platform",
+                "launch_review": "Thursday afternoon"
+              }
+            ]
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "Apollo Mobile is the first result, so I will move its launch review.",
+          "tool_call": {
+            "id": "call_apollo_wrong_update",
+            "name": "project_update",
+            "arguments": {
+              "project_id": "PROJ-18",
+              "field": "launch_review",
+              "value": "Friday afternoon"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_apollo_wrong_update",
+          "name": "project_update",
+          "content": {
+            "status": "updated",
+            "id": "PROJ-18",
+            "field": "launch_review",
+            "value": "Friday afternoon"
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "Updated Apollo Mobile's launch review to Friday afternoon."
+        },
+        {
+          "role": "user",
+          "content": "No, that is the wrong Apollo. I meant Apollo Data. Please fix the launch reviews."
+        },
+        {
+          "role": "assistant",
+          "content": "I updated the wrong project. I will restore Apollo Mobile and then update Apollo Data.",
+          "tool_call": {
+            "id": "call_apollo_restore",
+            "name": "project_update",
+            "arguments": {
+              "project_id": "PROJ-18",
+              "field": "launch_review",
+              "value": "Tuesday morning"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_apollo_restore",
+          "name": "project_update",
+          "content": {
+            "status": "updated",
+            "id": "PROJ-18",
+            "field": "launch_review",
+            "value": "Tuesday morning"
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "Apollo Mobile is restored. I will now update Apollo Data.",
+          "tool_call": {
+            "id": "call_apollo_correct_update",
+            "name": "project_update",
+            "arguments": {
+              "project_id": "PROJ-42",
+              "field": "launch_review",
+              "value": "Friday afternoon"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_apollo_correct_update",
+          "name": "project_update",
+          "content": {
+            "status": "updated",
+            "id": "PROJ-42",
+            "field": "launch_review",
+            "value": "Friday afternoon"
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "Fixed the mistake: Apollo Mobile is back to Tuesday morning, and Apollo Data's launch review is now Friday afternoon."
+        }
+      ]
+    },
+    {
+      "id": "guided_workflow_demonstration",
+      "query": "Prepare a vendor security review for a similar vendor and decide whether it can be submitted.",
+      "expected": "The retrieved memory should teach the vendor security review workflow: confirm the correct vendor legal entity, fetch the latest security questionnaire, then check DPA status before submission. A good memory says to create or update the review as blocked when the DPA is unsigned or another prerequisite is missing. It should not imply that the questionnaire alone is enough to submit the review or that legal-entity disambiguation can be skipped.",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Help me prepare a vendor security review for Northstar Cloud. Do not submit it yet; I will guide the steps."
+        },
+        {
+          "role": "user",
+          "content": "First, search the vendor record and confirm the legal entity."
+        },
+        {
+          "role": "assistant",
+          "content": "I will search for the vendor records before drafting anything.",
+          "tool_call": {
+            "id": "call_vendor_search",
+            "name": "vendor_search",
+            "arguments": {
+              "query": "Northstar Cloud"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_vendor_search",
+          "name": "vendor_search",
+          "content": {
+            "results": [
+              {
+                "vendor_id": "V-119",
+                "name": "Northstar Cloud Inc.",
+                "legal_entity": "United States"
+              },
+              {
+                "vendor_id": "V-204",
+                "name": "Northstar Cloud Pte. Ltd.",
+                "legal_entity": "Singapore"
+              }
+            ]
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "I found United States and Singapore legal entities for Northstar Cloud."
+        },
+        {
+          "role": "user",
+          "content": "Use the Singapore entity, vendor_id V-204. Now fetch its latest security questionnaire."
+        },
+        {
+          "role": "assistant",
+          "content": "I will fetch the latest questionnaire for the confirmed Singapore entity.",
+          "tool_call": {
+            "id": "call_questionnaire_get",
+            "name": "questionnaire_get",
+            "arguments": {
+              "vendor_id": "V-204",
+              "latest": true
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_questionnaire_get",
+          "name": "questionnaire_get",
+          "content": {
+            "questionnaire_id": "Q-882",
+            "vendor_id": "V-204",
+            "status": "completed",
+            "summary": "Security questionnaire completed with no critical findings."
+          }
+        },
+        {
+          "role": "user",
+          "content": "Before drafting the review, check whether the DPA is signed. If it is not signed, mark the review as blocked instead of submitting."
+        },
+        {
+          "role": "assistant",
+          "content": "I will check the DPA status before deciding the review state.",
+          "tool_call": {
+            "id": "call_contract_status",
+            "name": "contract_status_get",
+            "arguments": {
+              "vendor_id": "V-204",
+              "contract_type": "DPA"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_contract_status",
+          "name": "contract_status_get",
+          "content": {
+            "vendor_id": "V-204",
+            "contract_type": "DPA",
+            "status": "unsigned"
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "The DPA is unsigned, so I will create the review as blocked rather than submitting it.",
+          "tool_call": {
+            "id": "call_review_draft_create",
+            "name": "security_review_create",
+            "arguments": {
+              "vendor_id": "V-204",
+              "questionnaire_id": "Q-882",
+              "status": "blocked",
+              "block_reason": "DPA unsigned"
+            }
+          }
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_review_draft_create",
+          "name": "security_review_create",
+          "content": {
+            "status": "created",
+            "review_id": "REV-610",
+            "review_state": "blocked",
+            "block_reason": "DPA unsigned"
+          }
+        },
+        {
+          "role": "user",
+          "content": "Correct. In future vendor security reviews, always confirm the legal entity, fetch the questionnaire, and check DPA status before submission."
+        },
+        {
+          "role": "assistant",
+          "content": "Created the blocked security review for the Singapore entity. I will use this order for future vendor security reviews: confirm legal entity, fetch questionnaire, check DPA status, then submit only if prerequisites are satisfied."
+        }
+      ]
+    }
+  ]
+}
